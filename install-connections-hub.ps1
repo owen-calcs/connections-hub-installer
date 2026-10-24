@@ -86,7 +86,7 @@ if ($Detect) { return }
 # ---------------------------------------------------------------- the key
 
 if (-not $ApiKey) {
-    $secure = Read-Host 'Paste your Connections Hub API key (input is hidden)' -AsSecureString
+    $secure = Read-Host 'Paste your Connections Hub API key and press Enter (right-click pastes here, you will see * as it goes in)' -AsSecureString
     $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
     try { $ApiKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }

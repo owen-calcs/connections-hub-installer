@@ -12,11 +12,15 @@ Docs: https://connectionshub.atlastube.com/docs/api/mcp
 
 ## Windows
 
+Double-click `install-connections-hub.cmd`, paste the key when it asks (right-click pastes), and press Enter. The window stays open at the end so you can read the result.
+
+Or from PowerShell:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install-connections-hub.ps1 YOUR_API_KEY
 ```
 
-Leave the key off and the script asks for it with hidden input. `--detect` (`-Detect` on Windows) lists the tools it finds and changes nothing. `--skip-verify` (`-SkipVerify`) skips the key check.
+Leave the key off and the script asks for it, showing `*` as you paste. `--detect` (`-Detect` on Windows) lists the tools it finds and changes nothing. `--skip-verify` (`-SkipVerify`) skips the key check.
 
 ## What it does
 
