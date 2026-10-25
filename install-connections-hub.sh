@@ -10,7 +10,7 @@
 #   1. Checks the key against the API (skip with --skip-verify).
 #   2. Saves the key as HUB_API_KEY for the REST API (curl, scripts, Codex, Gemini CLI).
 #   3. Adds the "connectionshub" MCP server to each tool it finds:
-#        Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Codex, Gemini CLI
+#        Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Antigravity, Codex, Gemini CLI
 #
 # Existing config files are backed up as <file>.bak-<timestamp> before they change.
 # A file that is not plain JSON (for example VS Code settings with comments) is left alone
@@ -74,8 +74,9 @@ add_client() { CLIENTS="$CLIENTS $1"; }
 { have_app "Cursor" || have_cmd cursor || [ -d "$HOME/.cursor" ]; } && add_client cursor
 { have_app "Visual Studio Code" || have_cmd code || [ -d "$HOME/Library/Application Support/Code/User" ]; } && add_client vscode
 { have_app "Windsurf" || have_cmd windsurf || [ -d "$HOME/.codeium/windsurf" ]; } && add_client windsurf
+{ have_app "Antigravity" || have_cmd antigravity || [ -d "$HOME/.gemini/antigravity" ] || [ -d "$HOME/.antigravity" ]; } && add_client antigravity
 { have_app "Codex" || have_cmd codex || [ -d "$HOME/.codex" ]; } && add_client codex
-{ have_cmd gemini || [ -d "$HOME/.gemini" ]; } && add_client gemini
+{ have_cmd gemini || [ -f "$HOME/.gemini/settings.json" ]; } && add_client gemini
 
 label() {
   case "$1" in
@@ -84,6 +85,7 @@ label() {
     cursor) echo "Cursor" ;;
     vscode) echo "VS Code (GitHub Copilot)" ;;
     windsurf) echo "Windsurf" ;;
+    antigravity) echo "Antigravity" ;;
     codex) echo "Codex" ;;
     gemini) echo "Gemini CLI" ;;
   esac
@@ -178,6 +180,7 @@ switch (kind) {
     putServer('mcpServers', { url: url, headers: { Authorization: bearer } });
     break;
   case 'windsurf':
+  case 'antigravity':
     putServer('mcpServers', { serverUrl: url, headers: { Authorization: bearer } });
     break;
   case 'desktop':
@@ -322,6 +325,18 @@ install_windsurf() {
   json_upsert "$HOME/.codeium/windsurf/mcp_config.json" windsurf secret || return 1
   ok "~/.codeium/windsurf/mcp_config.json"
   note "Windsurf: refresh the MCP list in Cascade, or restart Windsurf."
+}
+
+install_antigravity() {
+  # The IDE, CLI and 2.0 share ~/.gemini/config/mcp_config.json. Older IDE builds read
+  # ~/.gemini/antigravity/mcp_config.json, so that file is updated too when its folder exists.
+  json_upsert "$HOME/.gemini/config/mcp_config.json" antigravity secret || return 1
+  ok "~/.gemini/config/mcp_config.json"
+  if [ -d "$HOME/.gemini/antigravity" ]; then
+    json_upsert "$HOME/.gemini/antigravity/mcp_config.json" antigravity secret || return 1
+    ok "~/.gemini/antigravity/mcp_config.json (older layout)"
+  fi
+  note "Antigravity: open Manage MCP Servers and click Refresh, or restart it."
 }
 
 install_codex() {

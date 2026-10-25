@@ -7,7 +7,7 @@ Sets up the HSS Connections Hub API key and the Connections Hub MCP server on Wi
 2. Saves the key as the user environment variable HUB_API_KEY, for the REST API
    (curl, scripts, Codex, Gemini CLI).
 3. Adds the "connectionshub" MCP server to each tool it finds:
-   Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Codex, Gemini CLI
+   Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Antigravity, Codex, Gemini CLI
 
 Existing config files are backed up as <file>.bak-<timestamp> before they change.
 A file that is not plain JSON (for example VS Code settings with comments) is left
@@ -76,8 +76,9 @@ if ((Test-Path $DesktopDir) -or (Test-Path "$Local\AnthropicClaude") -or $storeD
 if ((Test-Path "$Local\Programs\cursor") -or (Test-Cmd cursor) -or (Test-Path "$Home_\.cursor")) { $Clients['cursor'] = 'Cursor' }
 if ((Test-Path "$Local\Programs\Microsoft VS Code") -or (Test-Cmd code) -or (Test-Path "$AppData\Code\User")) { $Clients['vscode'] = 'VS Code (GitHub Copilot)' }
 if ((Test-Path "$Local\Programs\Windsurf") -or (Test-Cmd windsurf) -or (Test-Path "$Home_\.codeium\windsurf")) { $Clients['windsurf'] = 'Windsurf' }
+if ((Test-Path "$Local\Programs\Antigravity") -or (Test-Cmd antigravity) -or (Test-Path "$Home_\.gemini\antigravity") -or (Test-Path "$Home_\.antigravity")) { $Clients['antigravity'] = 'Antigravity' }
 if ((Test-Cmd codex) -or (Test-Path "$Home_\.codex"))                             { $Clients['codex'] = 'Codex' }
-if ((Test-Cmd gemini) -or (Test-Path "$Home_\.gemini"))                           { $Clients['gemini'] = 'Gemini CLI' }
+if ((Test-Cmd gemini) -or (Test-Path "$Home_\.gemini\settings.json"))                           { $Clients['gemini'] = 'Gemini CLI' }
 
 Write-Host 'Detected tools:'
 if ($Clients.Count -eq 0) { Write-Dim 'none found' } else { foreach ($v in $Clients.Values) { Write-Ok $v } }
@@ -164,7 +165,7 @@ function Update-JsonConfig($path, $kind) {
         'cursor' {
             Set-Prop (Get-Section $obj 'mcpServers') 'connectionshub' ([ordered]@{ url = $McpUrl; headers = [ordered]@{ Authorization = $bearer } })
         }
-        'windsurf' {
+        { $_ -in 'windsurf', 'antigravity' } {
             Set-Prop (Get-Section $obj 'mcpServers') 'connectionshub' ([ordered]@{ serverUrl = $McpUrl; headers = [ordered]@{ Authorization = $bearer } })
         }
         'desktop' {
@@ -271,6 +272,19 @@ foreach ($id in @($Clients.Keys)) {
                 Update-JsonConfig "$Home_\.codeium\windsurf\mcp_config.json" 'windsurf'
                 Write-Ok '~\.codeium\windsurf\mcp_config.json'
                 $Notes.Add('Windsurf: refresh the MCP list in Cascade, or restart Windsurf.')
+            }
+        }
+        'antigravity' {
+            Invoke-Step $id {
+                # The IDE, CLI and 2.0 share ~\.gemini\config\mcp_config.json. Older IDE builds read
+                # ~\.gemini\antigravity\mcp_config.json, so that file is updated too when its folder exists.
+                Update-JsonConfig "$Home_\.gemini\config\mcp_config.json" 'antigravity'
+                Write-Ok '~\.gemini\config\mcp_config.json'
+                if (Test-Path "$Home_\.gemini\antigravity") {
+                    Update-JsonConfig "$Home_\.gemini\antigravity\mcp_config.json" 'antigravity'
+                    Write-Ok '~\.gemini\antigravity\mcp_config.json (older layout)'
+                }
+                $Notes.Add('Antigravity: open Manage MCP Servers and click Refresh, or restart it.')
             }
         }
         'codex' {

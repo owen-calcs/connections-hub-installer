@@ -35,6 +35,7 @@ Leave the key off and the script asks for it, showing `*` as you paste. `--detec
 | Cursor | `~/.cursor/mcp.json` |
 | VS Code | user `mcp.json`, prompts for the key |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| Antigravity | `~/.gemini/config/mcp_config.json` (and `~/.gemini/antigravity/mcp_config.json` if that folder exists) |
 | Codex | `~/.codex/config.toml`, reads `HUB_API_KEY` |
 | Gemini CLI | `~/.gemini/settings.json`, reads `HUB_API_KEY` |
 
@@ -42,4 +43,4 @@ Config files are backed up as `<file>.bak-<timestamp>` before they change. A fil
 
 ## Status
 
-The Mac script is tested against a fake home folder. The Windows script has not been run yet. The Windsurf format comes from Windsurf's own docs, not the Hub docs.
+The Mac script is tested against a fake home folder. The Windows script has not been run yet. The Windsurf and Antigravity formats come from those tools' own docs, not the Hub docs. Antigravity's config path has changed between releases, and I have not run it against a real install.
