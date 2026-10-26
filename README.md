@@ -6,6 +6,20 @@ Docs: https://connectionshub.atlastube.com/docs/api/mcp
 
 ## Mac
 
+On Finder:
+
+Double click the `install-connections-hub.sh` file:
+<img width="913" height="239" alt="Screenshot 2026-10-25 at 4 54 15 pm" src="https://github.com/user-attachments/assets/91084817-34d9-4d2a-8353-3545ea5de50b" />
+
+Then paste in your API key from your email. Note: paste is hidden, so it won't show you what you're pasting in for security reasons.
+
+<img width="654" height="254" alt="Screenshot 2026-10-25 at 4 55 09 pm" src="https://github.com/user-attachments/assets/f014ebc7-c457-4272-9825-2899b543fb49" />
+
+It will install an environment variable, `HUB_API_KEY` and install the MCP for all the installed applications it detects.
+
+<img width="902" height="695" alt="Screenshot 2026-10-25 at 4 55 35 pm" src="https://github.com/user-attachments/assets/0ae04166-837d-4a13-9ecb-69c5e3866ab0" />
+
+
 ```bash
 ./install-connections-hub.sh YOUR_API_KEY
 ```
