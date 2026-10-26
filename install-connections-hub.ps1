@@ -62,17 +62,58 @@ if (-not $ClaudeCmd) {
 }
 $ClaudeBin = if ($ClaudeCmd) { if ($ClaudeCmd.Source) { $ClaudeCmd.Source } else { $ClaudeCmd.FullName } } else { $null }
 
-# Claude Desktop from the Microsoft Store keeps its config in a Packages folder.
-$DesktopDir = "$AppData\Claude"
-$storeDir = Get-ChildItem "$Local\Packages" -Directory -Filter 'Claude_*' -ErrorAction SilentlyContinue |
-    Select-Object -First 1
-if ($storeDir -and (Test-Path -LiteralPath "$($storeDir.FullName)\LocalCache\Roaming\Claude")) {
-    $DesktopDir = "$($storeDir.FullName)\LocalCache\Roaming\Claude"
+# Claude Desktop reads %APPDATA%\Claude, but a Microsoft Store (MSIX) install can read a private
+# copy under a Packages folder instead, and an old one can be left behind. Write them all.
+$storeDirs = @(Get-ChildItem -LiteralPath "$Local\Packages" -Directory -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -like '*claude*' })
+$DesktopDirs = New-Object System.Collections.Generic.List[string]
+$DesktopDirs.Add("$AppData\Claude")   # always, created if missing
+foreach ($d in $storeDirs) {
+    $p = "$($d.FullName)\LocalCache\Roaming\Claude"
+    if (Test-Path -LiteralPath $p) { $DesktopDirs.Add($p) }
+}
+# Newer Store builds keep their settings in %LOCALAPPDATA%\Claude-Data\<package>\ (seen on 3.6556).
+foreach ($d in @(Get-ChildItem -LiteralPath "$Local\Claude-Data" -Directory -ErrorAction SilentlyContinue)) {
+    if ((Test-Path -LiteralPath "$($d.FullName)\config.json") -or (Test-Path -LiteralPath "$($d.FullName)\claude_desktop_config.json")) {
+        $DesktopDirs.Add($d.FullName)
+    }
+}
+
+# Every Claude Desktop process, including the background ones that keep running after the window
+# closes. Matched on install folder, so the Claude Code CLI (also claude.exe) is never touched.
+function Get-DesktopProcesses {
+    $session = (Get-Process -Id $PID).SessionId   # only this user's processes, never system services
+    @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        $p = $null; try { $p = $_.Path } catch { }
+        $_.SessionId -eq $session -and $p -and ($p -like '*\WindowsApps\Claude_*' -or $p -like '*\AnthropicClaude\*')
+    })
+}
+# Opens Claude Desktop again: the Microsoft Store build by its app id, otherwise the regular install.
+function Start-ClaudeDesktop {
+    try {
+        $pkg = Get-AppxPackage -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*Claude*' } | Select-Object -First 1
+        if ($pkg) {
+            $appId = @((Get-AppxPackageManifest $pkg).Package.Applications.Application)[0].Id
+            Start-Process "shell:AppsFolder\$($pkg.PackageFamilyName)!$appId"
+            return $true
+        }
+        $exe = "$Local\AnthropicClaude\claude.exe"
+        if (Test-Path -LiteralPath $exe) { Start-Process -FilePath $exe; return $true }
+    } catch { }
+    return $false
+}
+# "v20.18.1", or $null when node is not on PATH.
+function Get-NodeVersion {
+    if (-not (Test-Cmd node)) { return $null }
+    $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { return [string](& node -v 2>$null | Select-Object -First 1) }
+    catch { return $null }
+    finally { $ErrorActionPreference = $prev }
 }
 
 $Clients = [ordered]@{}
-if ($ClaudeBin -or (Test-Path "$Home_\.claude"))                                  { $Clients['claude-code'] = 'Claude Code' }
-if ((Test-Path $DesktopDir) -or (Test-Path "$Local\AnthropicClaude") -or $storeDir) { $Clients['claude-desktop'] = 'Claude Desktop' }
+if ($ClaudeBin)                                                                   { $Clients['claude-code'] = 'Claude Code' }
+if ((Test-Path "$AppData\Claude") -or (Test-Path "$Local\AnthropicClaude") -or (Test-Path "$Local\Claude-Data") -or ($storeDirs.Count -gt 0)) { $Clients['claude-desktop'] = 'Claude Desktop' }
 if ((Test-Path "$Local\Programs\cursor") -or (Test-Cmd cursor) -or (Test-Path "$Home_\.cursor")) { $Clients['cursor'] = 'Cursor' }
 if ((Test-Path "$Local\Programs\Microsoft VS Code") -or (Test-Cmd code) -or (Test-Path "$AppData\Code\User")) { $Clients['vscode'] = 'VS Code (GitHub Copilot)' }
 if ((Test-Path "$Local\Programs\Windsurf") -or (Test-Cmd windsurf) -or (Test-Path "$Home_\.codeium\windsurf")) { $Clients['windsurf'] = 'Windsurf' }
@@ -86,15 +127,74 @@ if ($Detect) { return }
 
 # ---------------------------------------------------------------- the key
 
-if (-not $ApiKey) {
-    $secure = Read-Host 'Paste your Connections Hub API key and press Enter (right-click pastes here, you will see * as it goes in)' -AsSecureString
-    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-    try { $ApiKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
-    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
-}
 # Accept a pasted "Bearer xxx", quotes, or stray whitespace.
-$Key = ($ApiKey -replace '^\s*Bearer\s+', '') -replace '[\s"'']', ''
-if (-not $Key) { Write-Fail 'No API key given. Usage: .\install-connections-hub.ps1 YOUR_API_KEY'; exit 1 }
+function Format-Key($raw) { ([string]$raw -replace '^\s*Bearer\s+', '') -replace '[\s"'']', '' }
+# Reads the key with a normal prompt (the hidden -AsSecureString prompt kept only 1 character of a
+# paste on some consoles), then blanks the line(s) it was shown on so the key doesn't stay on screen.
+function Read-KeyMasked($prompt) {
+    $raw = Read-Host $prompt
+    try {
+        $width = [Console]::BufferWidth
+        $lines = [Math]::Max(1, [Math]::Ceiling(($prompt.Length + 2 + ([string]$raw).Length) / $width))
+        $top = [Console]::CursorTop - $lines
+        if ($top -ge 0) {
+            for ($i = 0; $i -lt $lines; $i++) {
+                [Console]::SetCursorPosition(0, $top + $i)
+                [Console]::Write(' ' * ($width - 1))
+            }
+            [Console]::SetCursorPosition(0, $top)
+            Write-Host "$($prompt): ******** (hidden)"
+        }
+    } catch { }
+    return $raw
+}
+# Reads the key one keypress at a time and prints a * for each character, so a paste gives
+# feedback without showing the key. A pasted key arrives as ordinary keypresses, so the whole
+# key is read (the -AsSecureString prompt kept only 1 character on some consoles).
+function Read-KeyStars($prompt) {
+    try {
+        if ([Console]::IsInputRedirected) { throw 'input is redirected' }
+        Write-Host -NoNewline "$($prompt): "
+        $sb = New-Object System.Text.StringBuilder
+        while ($true) {
+            $k = [Console]::ReadKey($true)
+            if ($k.Key -eq [ConsoleKey]::Enter) { break }
+            if ($k.Key -eq [ConsoleKey]::Backspace) {
+                if ($sb.Length -gt 0) { [void]$sb.Remove($sb.Length - 1, 1); Write-Host -NoNewline "`b `b" }
+                continue
+            }
+            if (($k.KeyChar -ne [char]0) -and -not [char]::IsControl($k.KeyChar)) {
+                [void]$sb.Append($k.KeyChar); Write-Host -NoNewline '*'
+            }
+        }
+        Write-Host ''
+        return $sb.ToString()
+    } catch {
+        return Read-KeyMasked $prompt
+    }
+}
+$KeyPattern = '^zpka_[A-Za-z0-9_]{30,}$'
+
+if ($ApiKey) {
+    $Key = Format-Key $ApiKey
+    if ($Key -cnotmatch $KeyPattern) {
+        Write-Fail "The key given doesn't look like a whole key (got $($Key.Length) characters; keys start with zpka_). Copy it again from the email."
+        exit 1
+    }
+} else {
+    for ($try = 1; $try -le 3; $try++) {
+        # First try shows a * per character. If that paste didn't come through whole, later tries
+        # use a plain prompt (the key shows while pasting) and blank it straight after.
+        if ($try -eq 1) { $raw = Read-KeyStars 'Paste your Connections Hub API key and press Enter (right-click pastes; you will see * as it goes in)' }
+        else { $raw = Read-KeyMasked 'Paste it again and press Enter (this time it shows while you paste, then it is hidden)' }
+        $Key = Format-Key $raw
+        if ($Key -cmatch $KeyPattern) { break }
+        $msg = "That doesn't look like a whole key (got $($Key.Length) characters; keys start with zpka_)."
+        if ($try -lt 3) { Write-Warn "$msg Copy it again from the email and paste." }
+        else { Write-Fail "$msg Gave up after 3 tries. Usage: .\install-connections-hub.ps1 YOUR_API_KEY"; exit 1 }
+    }
+}
+Write-Ok "Got a $($Key.Length)-character key"
 
 Write-Host "`nChecking the key:"
 if ($SkipVerify) {
@@ -112,7 +212,7 @@ if ($SkipVerify) {
         } elseif ($status) {
             Write-Warn "API answered HTTP $status, carrying on"
         } else {
-            Write-Warn 'Could not reach api.calcs.com, carrying on without checking the key'
+            Write-Warn "Could not reach api.calcs.com ($($_.Exception.Message.Replace($Key, '<key>'))), carrying on without checking the key"
         }
     }
 }
@@ -172,7 +272,7 @@ function Update-JsonConfig($path, $kind) {
             Set-Prop (Get-Section $obj 'mcpServers') 'connectionshub' ([ordered]@{
                 command = 'npx'
                 args    = @('-y', 'mcp-remote', $McpUrl, '--header', 'Authorization:${HUB_AUTH}')
-                env     = [ordered]@{ HUB_AUTH = $bearer }
+                env     = [ordered]@{ HUB_AUTH = $bearer; NODE_OPTIONS = '--use-system-ca' }   # trust the OS certificate store (antivirus/proxy HTTPS inspection)
             })
         }
         'gemini' {
@@ -239,38 +339,72 @@ foreach ($id in @($Clients.Keys)) {
                     $code = $LASTEXITCODE
                 } finally { $ErrorActionPreference = $prev }
                 if ($code -ne 0) { throw "claude mcp add failed: $out" }
-                try { Update-JsonConfig "$Home_\.claude\settings.json" 'claude-settings' }
+                try { Update-JsonConfig "$Home_\.claude\settings.json" 'claude-settings'; Write-Ok "$Home_\.claude\settings.json (MAX_MCP_OUTPUT_TOKENS)" }
                 catch { Write-Warn "Could not raise MAX_MCP_OUTPUT_TOKENS in ~\.claude\settings.json: $($_.Exception.Message)" }
                 Write-Ok "user-scope server 'connectionshub' (check with /mcp)"
             }
         }
         'claude-desktop' {
             Invoke-Step $id {
-                Update-JsonConfig "$DesktopDir\claude_desktop_config.json" 'desktop'
-                if (-not (Test-Cmd npx)) { Write-Warn 'Claude Desktop needs Node.js (npx) to reach the server. Install it from https://nodejs.org' }
-                Write-Ok 'claude_desktop_config.json'
-                $Notes.Add('Quit and reopen Claude Desktop.')
+                # Claude Desktop only reads its config when it starts, and can rewrite the file when it quits,
+                # so close it completely (background processes too) before writing, then reopen it.
+                $reopen = $false
+                if ((Get-DesktopProcesses).Count -gt 0) {
+                    $ans = Read-Host 'Claude Desktop is open and has to restart to load Connections Hub. Close it now? Any unsent message is lost. [Y/n]'
+                    if ($ans -notmatch '^\s*n') {
+                        Get-DesktopProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
+                        Start-Sleep -Seconds 2
+                        if ((Get-DesktopProcesses).Count -gt 0) {
+                            Write-Warn 'Some Claude Desktop processes are still running. If the server is missing later, end them in Task Manager and run this again.'
+                        } else {
+                            Write-Ok 'Closed Claude Desktop'
+                        }
+                        $reopen = $true
+                    } else {
+                        Write-Warn 'Left Claude Desktop open. Quit it fully afterwards (check the icon by the clock) and reopen it.'
+                    }
+                }
+                $failed = 0
+                foreach ($dir in $DesktopDirs) {
+                    $f = "$dir\claude_desktop_config.json"
+                    try { Update-JsonConfig $f 'desktop'; Write-Ok "claude_desktop_config.json: $f" }
+                    catch { Write-Fail "${f}: $($_.Exception.Message)"; $failed++ }
+                }
+                # The server runs through npx mcp-remote (undici 7 needs Node 20.18.1+), and --use-system-ca needs Node 22.15+.
+                $nodeV = Get-NodeVersion
+                $nodeOk = ($nodeV -match '^v(\d+\.\d+\.\d+)') -and ([version]$Matches[1] -ge [version]'22.15.0')
+                if ($reopen) {
+                    if (Start-ClaudeDesktop) { Write-Ok 'Reopened Claude Desktop' }
+                    else { $Notes.Add('Open Claude Desktop again.') }
+                } elseif ($ans -match '^\s*n') {
+                    $Notes.Add('Quit Claude Desktop fully and reopen it.')
+                }
+                if (-not $nodeOk) {
+                    $found = if ($nodeV) { "found $nodeV" } else { 'not found' }
+                    throw "Claude Desktop needs Node.js 22 or newer ($found). Install the LTS version from https://nodejs.org, then run this installer again."
+                }
+                if ($failed -gt 0) { throw "$failed of $($DesktopDirs.Count) claude_desktop_config.json files could not be updated" }
             }
         }
         'cursor' {
             Invoke-Step $id {
                 # User-level file, outside any project, with the key inside so it works however Cursor is launched.
                 Update-JsonConfig "$Home_\.cursor\mcp.json" 'cursor'
-                Write-Ok '~\.cursor\mcp.json'
+                Write-Ok "$Home_\.cursor\mcp.json"
                 $Notes.Add("In Cursor Settings, switch the 'connectionshub' MCP server on. Cursor adds it switched off.")
             }
         }
         'vscode' {
             Invoke-Step $id {
                 Update-JsonConfig "$AppData\Code\User\mcp.json" 'vscode'
-                Write-Ok 'user mcp.json (VS Code asks for the key the first time the server starts)'
+                Write-Ok "$AppData\Code\User\mcp.json (VS Code asks for the key the first time the server starts)"
                 $Notes.Add('VS Code: use Copilot Chat in Agent mode and turn on the connectionshub tools under Configure Tools.')
             }
         }
         'windsurf' {
             Invoke-Step $id {
                 Update-JsonConfig "$Home_\.codeium\windsurf\mcp_config.json" 'windsurf'
-                Write-Ok '~\.codeium\windsurf\mcp_config.json'
+                Write-Ok "$Home_\.codeium\windsurf\mcp_config.json"
                 $Notes.Add('Windsurf: refresh the MCP list in Cascade, or restart Windsurf.')
             }
         }
@@ -279,10 +413,10 @@ foreach ($id in @($Clients.Keys)) {
                 # The IDE, CLI and 2.0 share ~\.gemini\config\mcp_config.json. Older IDE builds read
                 # ~\.gemini\antigravity\mcp_config.json, so that file is updated too when its folder exists.
                 Update-JsonConfig "$Home_\.gemini\config\mcp_config.json" 'antigravity'
-                Write-Ok '~\.gemini\config\mcp_config.json'
+                Write-Ok "$Home_\.gemini\config\mcp_config.json"
                 if (Test-Path "$Home_\.gemini\antigravity") {
                     Update-JsonConfig "$Home_\.gemini\antigravity\mcp_config.json" 'antigravity'
-                    Write-Ok '~\.gemini\antigravity\mcp_config.json (older layout)'
+                    Write-Ok "$Home_\.gemini\antigravity\mcp_config.json (older layout)"
                 }
                 $Notes.Add('Antigravity: open Manage MCP Servers and click Refresh, or restart it.')
             }
@@ -307,14 +441,14 @@ foreach ($id in @($Clients.Keys)) {
                 Backup-File $f
                 Write-Text $f (($kept -join "`n") + "`n")
                 Remove-BackupIfSame $f
-                Write-Ok "~\.codex\config.toml (reads the key from $EnvName, 120 s tool timeout)"
+                Write-Ok "$f (reads the key from $EnvName, 120 s tool timeout)"
                 $Notes.Add("Codex reads $EnvName when it starts. Start it from a new terminal window.")
             }
         }
         'gemini' {
             Invoke-Step $id {
                 Update-JsonConfig "$Home_\.gemini\settings.json" 'gemini'
-                Write-Ok "~\.gemini\settings.json (reads the key from $EnvName)"
+                Write-Ok "$Home_\.gemini\settings.json (reads the key from $EnvName)"
             }
         }
     }
@@ -326,7 +460,7 @@ Write-Host ''
 if ($Done.Count -gt 0) { Write-Host ('Configured: ' + ($Done -join ', ')) }
 if ($Problems.Count -gt 0) {
     Write-Host ('Needs attention: ' + ($Problems -join ', ')) -ForegroundColor Yellow
-    Write-Host 'See the messages above. Nothing was overwritten for those. Manual steps: https://connectionshub.atlastube.com/docs/api/mcp'
+    Write-Host 'See the messages above. Manual steps (section 3): https://app.notion.com/p/NCSEA-Hackathon-Connections-Hub-Starter-Kit-API-and-MCP-3f3253e39d4081668f98d0f9bd05a7f7'
 }
 if ($Notes.Count -gt 0) {
     Write-Host 'Next steps:'

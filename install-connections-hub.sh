@@ -69,7 +69,7 @@ CLIENTS=""   # space separated ids of detected tools
 detected() { case " $CLIENTS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 add_client() { CLIENTS="$CLIENTS $1"; }
 
-[ -n "$CLAUDE_BIN" ] || [ -d "$HOME/.claude" ] && add_client claude-code
+[ -n "$CLAUDE_BIN" ] && add_client claude-code   # a ~/.claude folder alone does not count (Claude Desktop can make it)
 { have_app "Claude" || [ -d "$HOME/Library/Application Support/Claude" ]; } && add_client claude-desktop
 { have_app "Cursor" || have_cmd cursor || [ -d "$HOME/.cursor" ]; } && add_client cursor
 { have_app "Visual Studio Code" || have_cmd code || [ -d "$HOME/Library/Application Support/Code/User" ]; } && add_client vscode
@@ -107,33 +107,51 @@ if [ "$(uname -s)" != "Darwin" ]; then
   exit 1
 fi
 
-if [ -z "$KEY" ]; then
-  if [ -t 0 ] || [ -r /dev/tty ]; then
-    printf 'Paste your Connections Hub API key (input is hidden): ' >/dev/tty
-    IFS= read -rs KEY </dev/tty
-    printf '\n' >/dev/tty
-  fi
-fi
-
 # Accept a pasted "Bearer xxx", quotes, or stray whitespace.
-KEY="${KEY#Bearer }"
-KEY="$(printf '%s' "$KEY" | tr -d '[:space:]"'"'")"
+clean_key() { local k="${1#Bearer }"; printf '%s' "$k" | tr -d '[:space:]"'"'"; }
+KEY_RE='^zpka_[A-Za-z0-9_]{30,}$'
+key_ok() { [[ "$1" =~ $KEY_RE ]]; }
 
-if [ -z "$KEY" ]; then
+if [ -n "$KEY" ]; then
+  KEY="$(clean_key "$KEY")"
+  if ! key_ok "$KEY"; then
+    fail "The key given doesn't look like a whole key (got ${#KEY} characters; keys start with zpka_). Copy it again from the email."
+    exit 1
+  fi
+elif [ -t 0 ] || [ -r /dev/tty ]; then
+  tries=0
+  while :; do
+    tries=$((tries + 1)); KEY=""
+    printf 'Paste your Connections Hub API key (input is hidden): ' >/dev/tty
+    IFS= read -rs KEY </dev/tty || [ -n "$KEY" ] || { printf '\n' >/dev/tty; fail "No API key given. Usage: $0 YOUR_API_KEY"; exit 1; }
+    printf '\n' >/dev/tty
+    KEY="$(clean_key "$KEY")"
+    key_ok "$KEY" && break
+    msg="That doesn't look like a whole key (got ${#KEY} characters; keys start with zpka_)."
+    if [ "$tries" -lt 3 ]; then warn "$msg Copy it again from the email and paste."; continue; fi
+    fail "$msg Gave up after 3 tries. Usage: $0 YOUR_API_KEY"
+    exit 1
+  done
+else
   fail "No API key given. Usage: $0 YOUR_API_KEY"
   exit 1
 fi
+ok "Got a ${#KEY}-character key"
 
 echo
 echo "Checking the key:"
 if [ "$SKIP_VERIFY" = 1 ]; then
   dim "skipped"
 else
-  code="$(curl -s -o /dev/null -m 15 -w '%{http_code}' -H "Authorization: Bearer $KEY" "$API_URL" 2>/dev/null || true)"
+  curl_err="$(mktemp)"
+  code="$(curl -sS -o /dev/null -m 15 -w '%{http_code}' -H "Authorization: Bearer $KEY" "$API_URL" 2>"$curl_err")"
+  rc=$?
+  why="$(tr '\n' ' ' <"$curl_err" | sed 's/ *$//')"; rm -f "$curl_err"
+  [ -n "$why" ] || why="curl exit $rc"
   case "$code" in
     200) ok "API accepted the key" ;;
     401|403) fail "API rejected the key (HTTP $code). Check you copied all of it."; exit 1 ;;
-    000|"") warn "Could not reach api.calcs.com, carrying on without checking the key" ;;
+    000|"") warn "Could not reach api.calcs.com ($why), carrying on without checking the key" ;;
     *) warn "API answered HTTP $code, carrying on" ;;
   esac
 fi
@@ -187,7 +205,7 @@ switch (kind) {
     putServer('mcpServers', {
       command: 'npx',
       args: ['-y', 'mcp-remote', url, '--header', 'Authorization:${HUB_AUTH}'],
-      env: { HUB_AUTH: bearer }
+      env: { HUB_AUTH: bearer, NODE_OPTIONS: '--use-system-ca' }
     });
     break;
   case 'gemini':
@@ -296,34 +314,73 @@ install_claude_code() {
     return 1
   fi
   # get_calculator replies are big, Claude Code's default output limit is too low for them
-  json_upsert "$HOME/.claude/settings.json" claude-settings || warn "Could not raise MAX_MCP_OUTPUT_TOKENS in ~/.claude/settings.json"
+  if json_upsert "$HOME/.claude/settings.json" claude-settings; then
+    ok "$HOME/.claude/settings.json (MAX_MCP_OUTPUT_TOKENS)"
+  else
+    warn "Could not raise MAX_MCP_OUTPUT_TOKENS in ~/.claude/settings.json"
+  fi
   ok "user-scope server 'connectionshub' (check with /mcp)"
 }
 
+# true when $1 (like v22.15.0) is Node 22.15.0 or newer
+node_ok() {
+  local re='^v([0-9]+)\.([0-9]+)\.([0-9]+)'
+  [[ "$1" =~ $re ]] || return 1
+  [ $(( ${BASH_REMATCH[1]} * 1000000 + ${BASH_REMATCH[2]} * 1000 + ${BASH_REMATCH[3]} )) -ge 22015000 ]
+}
+
 install_claude_desktop() {
-  json_upsert "$HOME/Library/Application Support/Claude/claude_desktop_config.json" desktop secret || return 1
-  have_cmd npx || warn "Claude Desktop needs Node.js (npx) to reach the server. Install it from https://nodejs.org"
-  ok "claude_desktop_config.json"
-  note "Quit and reopen Claude Desktop."
+  local f="$HOME/Library/Application Support/Claude/claude_desktop_config.json" nv found="not found"
+  # Claude Desktop only reads its config when it starts, and can rewrite the file when it quits,
+  # so quit it before writing, then reopen it. "Claude" (capital C) is the app; the CLI is "claude".
+  local reopen=0 ans i
+  if pgrep -x Claude >/dev/null 2>&1; then
+    printf '  Claude Desktop is open and has to restart to load Connections Hub. Quit it now? Any unsent message is lost. [Y/n] ' >/dev/tty
+    IFS= read -r ans </dev/tty
+    case "$ans" in
+      [nN]*) warn "Left Claude Desktop open. Quit it (Cmd+Q) afterwards and reopen it." ;;
+      *)
+        osascript -e 'tell application "Claude" to quit' >/dev/null 2>&1
+        for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -x Claude >/dev/null 2>&1 || break; sleep 1; done
+        pgrep -x Claude >/dev/null 2>&1 && { pkill -x Claude; sleep 2; }
+        if pgrep -x Claude >/dev/null 2>&1; then
+          warn "Claude Desktop is still running. If the server is missing later, quit it from the Dock and run this again."
+        else
+          ok "Quit Claude Desktop"
+        fi
+        reopen=1 ;;
+    esac
+  fi
+  json_upsert "$f" desktop secret || return 1
+  ok "claude_desktop_config.json: $f"
+  # The server runs through npx mcp-remote (undici 7 needs Node 20.18.1+), and --use-system-ca needs Node 22.15+.
+  nv="$(node -v 2>/dev/null)"; [ -n "$nv" ] && found="found $nv"
+  if [ "$reopen" = 1 ]; then
+    if open -a Claude >/dev/null 2>&1; then ok "Reopened Claude Desktop"; else note "Open Claude Desktop again."; fi
+  fi
+  if ! node_ok "$nv"; then
+    fail "Claude Desktop needs Node.js 22 or newer ($found). Install the LTS version from https://nodejs.org, then run this installer again."
+    return 1
+  fi
 }
 
 install_cursor() {
   # Written with the key inside, because Cursor opened from the Dock cannot see shell variables.
   # This is Cursor's user-level file, outside any project.
   json_upsert "$HOME/.cursor/mcp.json" cursor secret || return 1
-  ok "~/.cursor/mcp.json"
+  ok "$HOME/.cursor/mcp.json"
   note "In Cursor Settings, switch the 'connectionshub' MCP server on. Cursor adds it switched off."
 }
 
 install_vscode() {
   json_upsert "$HOME/Library/Application Support/Code/User/mcp.json" vscode || return 1
-  ok "user mcp.json (VS Code asks for the key the first time the server starts)"
+  ok "$HOME/Library/Application Support/Code/User/mcp.json (VS Code asks for the key the first time the server starts)"
   note "VS Code: use Copilot Chat in Agent mode and turn on the connectionshub tools under Configure Tools."
 }
 
 install_windsurf() {
   json_upsert "$HOME/.codeium/windsurf/mcp_config.json" windsurf secret || return 1
-  ok "~/.codeium/windsurf/mcp_config.json"
+  ok "$HOME/.codeium/windsurf/mcp_config.json"
   note "Windsurf: refresh the MCP list in Cascade, or restart Windsurf."
 }
 
@@ -331,10 +388,10 @@ install_antigravity() {
   # The IDE, CLI and 2.0 share ~/.gemini/config/mcp_config.json. Older IDE builds read
   # ~/.gemini/antigravity/mcp_config.json, so that file is updated too when its folder exists.
   json_upsert "$HOME/.gemini/config/mcp_config.json" antigravity secret || return 1
-  ok "~/.gemini/config/mcp_config.json"
+  ok "$HOME/.gemini/config/mcp_config.json"
   if [ -d "$HOME/.gemini/antigravity" ]; then
     json_upsert "$HOME/.gemini/antigravity/mcp_config.json" antigravity secret || return 1
-    ok "~/.gemini/antigravity/mcp_config.json (older layout)"
+    ok "$HOME/.gemini/antigravity/mcp_config.json (older layout)"
   fi
   note "Antigravity: open Manage MCP Servers and click Refresh, or restart it."
 }
@@ -362,13 +419,13 @@ TOML
   cat "$tmp.new" > "$f"
   rm -f "$tmp" "$tmp.new"
   if [ -f "$f.bak-$STAMP" ] && cmp -s "$f" "$f.bak-$STAMP"; then rm -f "$f.bak-$STAMP"; fi
-  ok "~/.codex/config.toml (reads the key from $ENV_NAME, 120 s tool timeout)"
+  ok "$f (reads the key from $ENV_NAME, 120 s tool timeout)"
   note "Codex reads $ENV_NAME from the terminal it starts in. Start it from a new terminal window."
 }
 
 install_gemini() {
   json_upsert "$HOME/.gemini/settings.json" gemini || return 1
-  ok "~/.gemini/settings.json (reads the key from $ENV_NAME)"
+  ok "$HOME/.gemini/settings.json (reads the key from $ENV_NAME)"
 }
 
 echo
@@ -391,7 +448,7 @@ if [ -n "$DONE" ]; then
 fi
 if [ -n "$PROBLEMS" ]; then
   printf '%sNeeds attention:%s' "$C_WARN" "$C_OFF"; for c in $PROBLEMS; do printf ' %s,' "$(label "$c")"; done | sed 's/,$//'; echo
-  echo "See the messages above. Nothing was overwritten for those. Manual steps: https://connectionshub.atlastube.com/docs/api/mcp"
+  echo "See the messages above. Manual steps (section 3): https://app.notion.com/p/NCSEA-Hackathon-Connections-Hub-Starter-Kit-API-and-MCP-3f3253e39d4081668f98d0f9bd05a7f7"
 fi
 if [ -n "$NOTES" ]; then
   echo "Next steps:$NOTES"
