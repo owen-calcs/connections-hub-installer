@@ -9,7 +9,7 @@
 # What it does:
 #   1. Checks the key against the API (skip with --skip-verify).
 #   2. Saves the key as HUB_API_KEY for the REST API (curl, scripts, Codex, Gemini CLI).
-#   3. Adds the "connectionshub" MCP server to each tool it finds:
+#   3. Adds the "calcs" MCP server to each tool it finds:
 #        Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Antigravity, Codex, Gemini CLI
 #
 # Existing config files are backed up as <file>.bak-<timestamp> before they change.
@@ -21,10 +21,10 @@ set -u
 MCP_URL="https://api.calcs.com/mcp"
 API_URL="https://api.calcs.com/v1/projects"
 ENV_NAME="HUB_API_KEY"
-ENV_DIR="$HOME/.config/connectionshub"
+ENV_DIR="$HOME/.config/calcs"
 ENV_FILE="$ENV_DIR/hub-api-key.sh"
-MARK_BEGIN="# >>> connections hub >>>"
-MARK_END="# <<< connections hub <<<"
+MARK_BEGIN="# >>> calcs >>>"
+MARK_END="# <<< calcs <<<"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
 KEY=""
@@ -190,7 +190,7 @@ if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) throw new Err
 const bearer = 'Bearer ' + key;
 const putServer = (top, entry) => {
   if (obj[top] === null || typeof obj[top] !== 'object' || Array.isArray(obj[top])) obj[top] = {};
-  obj[top].connectionshub = entry;
+  obj[top].calcs = entry;
 };
 
 switch (kind) {
@@ -212,10 +212,10 @@ switch (kind) {
     putServer('mcpServers', { httpUrl: url, headers: { Authorization: 'Bearer $HUB_API_KEY' } });
     break;
   case 'vscode': {
-    const input = { type: 'promptString', id: 'connectionshub-api-key', description: 'Connections Hub API key', password: true };
+    const input = { type: 'promptString', id: 'calcs-api-key', description: 'Connections Hub API key', password: true };
     const rest = Array.isArray(obj.inputs) ? obj.inputs.filter(i => !i || i.id !== input.id) : [];
     obj.inputs = rest.concat([input]);
-    putServer('servers', { type: 'http', url: url, headers: { Authorization: 'Bearer ${input:connectionshub-api-key}' } });
+    putServer('servers', { type: 'http', url: url, headers: { Authorization: 'Bearer ${input:calcs-api-key}' } });
     break;
   }
   case 'claude-settings': {
@@ -306,9 +306,9 @@ install_claude_code() {
     warn "Claude Code config found but the 'claude' command is not on PATH"
     return 1
   fi
-  "$CLAUDE_BIN" mcp remove connectionshub --scope user >/dev/null 2>&1
+  "$CLAUDE_BIN" mcp remove calcs --scope user >/dev/null 2>&1
   local err
-  if ! err="$("$CLAUDE_BIN" mcp add --scope user --transport http connectionshub "$MCP_URL" \
+  if ! err="$("$CLAUDE_BIN" mcp add --scope user --transport http calcs "$MCP_URL" \
         --header "Authorization: Bearer $KEY" 2>&1)"; then
     fail "claude mcp add failed: $err"
     return 1
@@ -319,7 +319,7 @@ install_claude_code() {
   else
     warn "Could not raise MAX_MCP_OUTPUT_TOKENS in ~/.claude/settings.json"
   fi
-  ok "user-scope server 'connectionshub' (check with /mcp)"
+  ok "user-scope server 'calcs' (check with /mcp)"
 }
 
 # true when $1 (like v22.15.0) is Node 22.15.0 or newer
@@ -369,13 +369,13 @@ install_cursor() {
   # This is Cursor's user-level file, outside any project.
   json_upsert "$HOME/.cursor/mcp.json" cursor secret || return 1
   ok "$HOME/.cursor/mcp.json"
-  note "In Cursor Settings, switch the 'connectionshub' MCP server on. Cursor adds it switched off."
+  note "In Cursor Settings, switch the 'calcs' MCP server on. Cursor adds it switched off."
 }
 
 install_vscode() {
   json_upsert "$HOME/Library/Application Support/Code/User/mcp.json" vscode || return 1
   ok "$HOME/Library/Application Support/Code/User/mcp.json (VS Code asks for the key the first time the server starts)"
-  note "VS Code: use Copilot Chat in Agent mode and turn on the connectionshub tools under Configure Tools."
+  note "VS Code: use Copilot Chat in Agent mode and turn on the calcs tools under Configure Tools."
 }
 
 install_windsurf() {
@@ -403,14 +403,14 @@ install_codex() {
   tmp="$(mktemp)"
   if [ -f "$f" ]; then
     awk '
-      /^\[/ { skip = ($0 ~ /^\[mcp_servers\.connectionshub(\]|\.)/) }
+      /^\[/ { skip = ($0 ~ /^\[mcp_servers\.calcs(\]|\.)/) }
       !skip { print }' "$f" | trim_blanks > "$tmp"
   fi
   {
     cat "$tmp"
     [ -s "$tmp" ] && printf '\n'
     cat <<TOML
-[mcp_servers.connectionshub]
+[mcp_servers.calcs]
 url = "$MCP_URL"
 bearer_token_env_var = "$ENV_NAME"
 tool_timeout_sec = 120

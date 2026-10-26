@@ -6,7 +6,7 @@ Sets up the HSS Connections Hub API key and the Connections Hub MCP server on Wi
 1. Checks the key against the API (skip with -SkipVerify).
 2. Saves the key as the user environment variable HUB_API_KEY, for the REST API
    (curl, scripts, Codex, Gemini CLI).
-3. Adds the "connectionshub" MCP server to each tool it finds:
+3. Adds the "calcs" MCP server to each tool it finds:
    Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Antigravity, Codex, Gemini CLI
 
 Existing config files are backed up as <file>.bak-<timestamp> before they change.
@@ -263,29 +263,29 @@ function Update-JsonConfig($path, $kind) {
     $bearer = "Bearer $Key"
     switch ($kind) {
         'cursor' {
-            Set-Prop (Get-Section $obj 'mcpServers') 'connectionshub' ([ordered]@{ url = $McpUrl; headers = [ordered]@{ Authorization = $bearer } })
+            Set-Prop (Get-Section $obj 'mcpServers') 'calcs' ([ordered]@{ url = $McpUrl; headers = [ordered]@{ Authorization = $bearer } })
         }
         { $_ -in 'windsurf', 'antigravity' } {
-            Set-Prop (Get-Section $obj 'mcpServers') 'connectionshub' ([ordered]@{ serverUrl = $McpUrl; headers = [ordered]@{ Authorization = $bearer } })
+            Set-Prop (Get-Section $obj 'mcpServers') 'calcs' ([ordered]@{ serverUrl = $McpUrl; headers = [ordered]@{ Authorization = $bearer } })
         }
         'desktop' {
-            Set-Prop (Get-Section $obj 'mcpServers') 'connectionshub' ([ordered]@{
+            Set-Prop (Get-Section $obj 'mcpServers') 'calcs' ([ordered]@{
                 command = 'npx'
                 args    = @('-y', 'mcp-remote', $McpUrl, '--header', 'Authorization:${HUB_AUTH}')
                 env     = [ordered]@{ HUB_AUTH = $bearer; NODE_OPTIONS = '--use-system-ca' }   # trust the OS certificate store (antivirus/proxy HTTPS inspection)
             })
         }
         'gemini' {
-            Set-Prop (Get-Section $obj 'mcpServers') 'connectionshub' ([ordered]@{ httpUrl = $McpUrl; headers = [ordered]@{ Authorization = 'Bearer $HUB_API_KEY' } })
+            Set-Prop (Get-Section $obj 'mcpServers') 'calcs' ([ordered]@{ httpUrl = $McpUrl; headers = [ordered]@{ Authorization = 'Bearer $HUB_API_KEY' } })
         }
         'vscode' {
-            $keyInput = [ordered]@{ type = 'promptString'; id = 'connectionshub-api-key'; description = 'Connections Hub API key'; password = $true }
+            $keyInput = [ordered]@{ type = 'promptString'; id = 'calcs-api-key'; description = 'Connections Hub API key'; password = $true }
             $rest = @()
             if ($obj.PSObject.Properties['inputs'] -and $obj.inputs -is [array]) {
-                $rest = @($obj.inputs | Where-Object { -not $_ -or $_.id -ne 'connectionshub-api-key' })
+                $rest = @($obj.inputs | Where-Object { -not $_ -or $_.id -ne 'calcs-api-key' })
             }
             Set-Prop $obj 'inputs' ([object[]]($rest + @($keyInput)))
-            Set-Prop (Get-Section $obj 'servers') 'connectionshub' ([ordered]@{ type = 'http'; url = $McpUrl; headers = [ordered]@{ Authorization = 'Bearer ${input:connectionshub-api-key}' } })
+            Set-Prop (Get-Section $obj 'servers') 'calcs' ([ordered]@{ type = 'http'; url = $McpUrl; headers = [ordered]@{ Authorization = 'Bearer ${input:calcs-api-key}' } })
         }
         'claude-settings' {
             $envSec = Get-Section $obj 'env'
@@ -334,14 +334,14 @@ foreach ($id in @($Clients.Keys)) {
                 # Native commands write to stderr on normal failures, which Stop would turn into an exception.
                 $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
                 try {
-                    & $ClaudeBin mcp remove connectionshub --scope user 2>&1 | Out-Null
-                    $out = & $ClaudeBin mcp add --scope user --transport http connectionshub $McpUrl --header "Authorization: Bearer $Key" 2>&1
+                    & $ClaudeBin mcp remove calcs --scope user 2>&1 | Out-Null
+                    $out = & $ClaudeBin mcp add --scope user --transport http calcs $McpUrl --header "Authorization: Bearer $Key" 2>&1
                     $code = $LASTEXITCODE
                 } finally { $ErrorActionPreference = $prev }
                 if ($code -ne 0) { throw "claude mcp add failed: $out" }
                 try { Update-JsonConfig "$Home_\.claude\settings.json" 'claude-settings'; Write-Ok "$Home_\.claude\settings.json (MAX_MCP_OUTPUT_TOKENS)" }
                 catch { Write-Warn "Could not raise MAX_MCP_OUTPUT_TOKENS in ~\.claude\settings.json: $($_.Exception.Message)" }
-                Write-Ok "user-scope server 'connectionshub' (check with /mcp)"
+                Write-Ok "user-scope server 'calcs' (check with /mcp)"
             }
         }
         'claude-desktop' {
@@ -391,14 +391,14 @@ foreach ($id in @($Clients.Keys)) {
                 # User-level file, outside any project, with the key inside so it works however Cursor is launched.
                 Update-JsonConfig "$Home_\.cursor\mcp.json" 'cursor'
                 Write-Ok "$Home_\.cursor\mcp.json"
-                $Notes.Add("In Cursor Settings, switch the 'connectionshub' MCP server on. Cursor adds it switched off.")
+                $Notes.Add("In Cursor Settings, switch the 'calcs' MCP server on. Cursor adds it switched off.")
             }
         }
         'vscode' {
             Invoke-Step $id {
                 Update-JsonConfig "$AppData\Code\User\mcp.json" 'vscode'
                 Write-Ok "$AppData\Code\User\mcp.json (VS Code asks for the key the first time the server starts)"
-                $Notes.Add('VS Code: use Copilot Chat in Agent mode and turn on the connectionshub tools under Configure Tools.')
+                $Notes.Add('VS Code: use Copilot Chat in Agent mode and turn on the calcs tools under Configure Tools.')
             }
         }
         'windsurf' {
@@ -428,13 +428,13 @@ foreach ($id in @($Clients.Keys)) {
                 if (Test-Path -LiteralPath $f) {
                     $skip = $false
                     foreach ($line in (Get-Content -LiteralPath $f)) {
-                        if ($line -match '^\[') { $skip = ($line -match '^\[mcp_servers\.connectionshub(\]|\.)') }
+                        if ($line -match '^\[') { $skip = ($line -match '^\[mcp_servers\.calcs(\]|\.)') }
                         if (-not $skip) { $kept.Add($line) }
                     }
                 }
                 while ($kept.Count -gt 0 -and [string]::IsNullOrWhiteSpace($kept[$kept.Count - 1])) { $kept.RemoveAt($kept.Count - 1) }
                 if ($kept.Count -gt 0) { $kept.Add('') }
-                $kept.Add('[mcp_servers.connectionshub]')
+                $kept.Add('[mcp_servers.calcs]')
                 $kept.Add("url = `"$McpUrl`"")
                 $kept.Add("bearer_token_env_var = `"$EnvName`"")
                 $kept.Add('tool_timeout_sec = 120')

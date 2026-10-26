@@ -60,8 +60,8 @@ Or pass the key straight in: `bash ./install-connections-hub.sh YOUR_API_KEY`
 ## What it does
 
 1. Checks the key looks complete (starts with `zpka_`) and that the API accepts it.
-2. Saves the key as `HUB_API_KEY`. On Mac that is `~/.config/connectionshub/hub-api-key.sh`, sourced from your shell rc file. On Windows it is a user environment variable.
-3. Adds a `connectionshub` MCP server (`https://api.calcs.com/mcp`) to each tool it finds, and prints the full path of every file it changes:
+2. Saves the key as `HUB_API_KEY`. On Mac that is `~/.config/calcs/hub-api-key.sh`, sourced from your shell rc file. On Windows it is a user environment variable.
+3. Adds a `calcs` MCP server (`https://api.calcs.com/mcp`) to each tool it finds, and prints the full path of every file it changes:
 
 | Tool | Config |
 |---|---|
@@ -84,7 +84,7 @@ Config files are backed up as `<file>.bak-<timestamp>` before they change. A fil
 | "API rejected the key" | Part of the key is missing. Copy it again |
 | "Could not reach api.calcs.com (…)" | Antivirus or company security is blocking it. Allow `api.calcs.com`, then run again |
 | "Claude Desktop needs Node.js 22 or newer" | Install Node.js LTS from nodejs.org, then run the installer again |
-| Claude Desktop shows connectionshub **Starting** forever, or **Failed** | Add `api.calcs.com` to your antivirus exceptions, then run the installer again |
+| Claude Desktop shows calcs **Starting** forever, or **Failed** | Add `api.calcs.com` to your antivirus exceptions, then run the installer again |
 | "running scripts is disabled" in red | Your company blocks scripts. Set your app up by hand: [attendee guide, section 3](https://app.notion.com/p/NCSEA-Hackathon-Connections-Hub-Starter-Kit-API-and-MCP-3f3253e39d4081668f98d0f9bd05a7f7) |
 
 ## Status
