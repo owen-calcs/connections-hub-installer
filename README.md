@@ -20,8 +20,10 @@ It will install an environment variable, `HUB_API_KEY` and install the MCP for a
 <img width="902" height="695" alt="Screenshot 2026-10-25 at 4 55 35 pm" src="https://github.com/user-attachments/assets/0ae04166-837d-4a13-9ecb-69c5e3866ab0" />
 
 
+You can also just do this from a terminal:
+
 ```bash
-./install-connections-hub.sh YOUR_API_KEY
+sh ./install-connections-hub.sh YOUR_API_KEY
 ```
 
 ## Windows
