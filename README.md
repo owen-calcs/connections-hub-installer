@@ -16,9 +16,15 @@ Docs: https://connectionshub.atlastube.com/docs/api/mcp
 1. Right-click the zip, choose **Extract All**, then open the folder. Don't run anything from inside the zip.
 2. Double-click **install-connections-hub** with the gear icon (type: Windows Command Script). Not the other files with the same name.
 
+<img src="docs/windows-1-files.png" alt="The extracted folder: double-click install-connections-hub with the gear icon, type Windows Command Script" width="620" />
+
 3. If Windows asks **"The publisher could not be verified"**, click **Run**. If it says **"Windows protected your PC"**, click **More info**, then **Run anyway**.
 
+<img src="docs/windows-2-security-warning.png" alt="Open File - Security Warning: click Run" width="450" />
+
 4. Paste your API key from your email (right-click pastes) and press Enter. You see a `*` for each character, never the key. If Claude Desktop is open, the installer asks to close it, then reopens it when it's done.
+
+<img src="docs/windows-3-installer-done.png" alt="Installer output: a 46-character key accepted, Claude Code, Claude Desktop and VS Code configured" width="900" />
 
 Or from PowerShell:
 
@@ -84,7 +90,8 @@ Config files are backed up as `<file>.bak-<timestamp>` before they change. A fil
 ## Status
 
 Tested 26 Oct 2026:
-- **Windows 11:** full runs on two PCs, including the Microsoft Store build of Claude Desktop, an old Node.js (flagged), and antivirus that inspects HTTPS (fixed by allowing `api.calcs.com`). Claude Desktop and VS Code connected.
+- **Windows 11:** full runs on two PCs, including the Microsoft Store build of Claude Desktop, an old Node.js (flagged), and antivirus that inspects HTTPS (fixed by allowing `api.calcs.com`). Claude Desktop and VS Code connected. A third PC ran the v1.0.0 release (`*` key prompt; Claude Code, Claude Desktop and VS Code configured; Claude Code connected).
 - **Mac:** a full run against a fake home folder (all six detected tools configured, Claude Code connected), and an earlier version on a real Mac with Claude Desktop.
+- **Antigravity** (Mac): connected and ran a calculation with the entry the installer writes.
 
-The Windsurf and Antigravity formats come from those tools' own docs, not the Hub docs, and haven't been run against a real install.
+Windsurf is now called Devin Desktop and hasn't been tested. Devin reads `~/.config/devin/mcp_config.json` and offers to copy the old Windsurf file the first time it opens.
