@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
-# Sets up the HSS Connections Hub API key and the Connections Hub MCP server on a Mac.
+# Sets up the Calcs API key and MCP server on a Mac.
 #
-#   ./install-connections-hub.sh YOUR_API_KEY
-#   ./install-connections-hub.sh --detect            list detected tools, change nothing
-#   ./install-connections-hub.sh YOUR_API_KEY --skip-verify
+#   ./install-calcs-mcp.sh YOUR_API_KEY
+#   ./install-calcs-mcp.sh --detect            list detected tools, change nothing
+#   ./install-calcs-mcp.sh YOUR_API_KEY --skip-verify
 #
 # What it does:
 #   1. Checks the key against the API (skip with --skip-verify).
-#   2. Saves the key as HUB_API_KEY for the REST API (curl, scripts, Codex, Gemini CLI).
+#   2. Saves the key as CALCS_API_KEY for the REST API (curl, scripts, Codex, Gemini CLI).
 #   3. Adds the "calcs" MCP server to each tool it finds:
 #        Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Antigravity, Codex, Gemini CLI
 #
@@ -20,9 +20,9 @@ set -u
 
 MCP_URL="https://api.calcs.com/mcp"
 API_URL="https://api.calcs.com/v1/projects"
-ENV_NAME="HUB_API_KEY"
+ENV_NAME="CALCS_API_KEY"
 ENV_DIR="$HOME/.config/calcs"
-ENV_FILE="$ENV_DIR/hub-api-key.sh"
+ENV_FILE="$ENV_DIR/calcs-api-key.sh"
 MARK_BEGIN="# >>> calcs >>>"
 MARK_END="# <<< calcs <<<"
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -103,7 +103,7 @@ if [ "$DETECT_ONLY" = 1 ]; then exit 0; fi
 # ---------------------------------------------------------------- the key
 
 if [ "$(uname -s)" != "Darwin" ]; then
-  fail "This script is for macOS. Use install-connections-hub.ps1 on Windows."
+  fail "This script is for macOS. Use install-calcs-mcp.ps1 on Windows."
   exit 1
 fi
 
@@ -122,7 +122,7 @@ elif [ -t 0 ] || [ -r /dev/tty ]; then
   tries=0
   while :; do
     tries=$((tries + 1)); KEY=""
-    printf 'Paste your Connections Hub API key (input is hidden): ' >/dev/tty
+    printf 'Paste your Calcs API key (input is hidden): ' >/dev/tty
     IFS= read -rs KEY </dev/tty || [ -n "$KEY" ] || { printf '\n' >/dev/tty; fail "No API key given. Usage: $0 YOUR_API_KEY"; exit 1; }
     printf '\n' >/dev/tty
     KEY="$(clean_key "$KEY")"
@@ -204,15 +204,15 @@ switch (kind) {
   case 'desktop':
     putServer('mcpServers', {
       command: 'npx',
-      args: ['-y', 'mcp-remote', url, '--header', 'Authorization:${HUB_AUTH}'],
-      env: { HUB_AUTH: bearer, NODE_OPTIONS: '--use-system-ca' }
+      args: ['-y', 'mcp-remote', url, '--header', 'Authorization:${CALCS_AUTH}'],
+      env: { CALCS_AUTH: bearer, NODE_OPTIONS: '--use-system-ca' }
     });
     break;
   case 'gemini':
-    putServer('mcpServers', { httpUrl: url, headers: { Authorization: 'Bearer $HUB_API_KEY' } });
+    putServer('mcpServers', { httpUrl: url, headers: { Authorization: 'Bearer $CALCS_API_KEY' } });
     break;
   case 'vscode': {
-    const input = { type: 'promptString', id: 'calcs-api-key', description: 'Connections Hub API key', password: true };
+    const input = { type: 'promptString', id: 'calcs-api-key', description: 'Calcs API key', password: true };
     const rest = Array.isArray(obj.inputs) ? obj.inputs.filter(i => !i || i.id !== input.id) : [];
     obj.inputs = rest.concat([input]);
     putServer('servers', { type: 'http', url: url, headers: { Authorization: 'Bearer ${input:calcs-api-key}' } });
@@ -251,7 +251,7 @@ json_upsert() {
   return 0
 }
 
-# ---------------------------------------------------------------- the API key (HUB_API_KEY)
+# ---------------------------------------------------------------- the API key (CALCS_API_KEY)
 
 install_env() {
   mkdir -p "$ENV_DIR" || return 1
@@ -335,7 +335,7 @@ install_claude_desktop() {
   # so quit it before writing, then reopen it. "Claude" (capital C) is the app; the CLI is "claude".
   local reopen=0 ans i
   if pgrep -x Claude >/dev/null 2>&1; then
-    printf '  Claude Desktop is open and has to restart to load Connections Hub. Quit it now? Any unsent message is lost. [Y/n] ' >/dev/tty
+    printf '  Claude Desktop is open and has to restart to load Calcs. Quit it now? Any unsent message is lost. [Y/n] ' >/dev/tty
     IFS= read -r ans </dev/tty
     case "$ans" in
       [nN]*) warn "Left Claude Desktop open. Quit it (Cmd+Q) afterwards and reopen it." ;;
@@ -454,6 +454,6 @@ if [ -n "$NOTES" ]; then
   echo "Next steps:$NOTES"
 fi
 echo
-echo "Test it by asking your tool: \"List the Connections Hub calculators.\""
+echo "Test it by asking your tool: \"List the available calculators.\""
 
 [ -z "$PROBLEMS" ]

@@ -1,8 +1,8 @@
-# Connections Hub installer
+# Calcs MCP installer
 
-Sets up the HSS Connections Hub API key and MCP server for the AI tools on your machine.
+Sets up the Calcs API key and MCP server for the AI tools on your machine.
 
-**Download:** [connections-hub-installer.zip](https://github.com/owen-calcs/connections-hub-installer/releases/latest/download/connections-hub-installer.zip)
+**Download:** [calcs-mcp-installer.zip](https://github.com/owen-calcs/calcs-mcp-installer/releases/latest/download/calcs-mcp-installer.zip)
 
 Docs: https://connectionshub.atlastube.com/docs/api/mcp
 
@@ -14,9 +14,9 @@ Docs: https://connectionshub.atlastube.com/docs/api/mcp
 ## Windows
 
 1. Right-click the zip, choose **Extract All**, then open the folder. Don't run anything from inside the zip.
-2. Open the **windows** folder and double-click **install-connections-hub** with the gear icon (type: Windows Command Script). Not the other file with the same name.
+2. Open the **windows** folder and double-click **install-calcs-mcp** with the gear icon (type: Windows Command Script). Not the other file with the same name.
 
-<img src="docs/windows-1-files.png" alt="The extracted folder: double-click install-connections-hub with the gear icon, type Windows Command Script" width="620" />
+<img src="docs/windows-1-files.png" alt="The extracted folder: double-click install-calcs-mcp with the gear icon, type Windows Command Script" width="620" />
 
 3. If Windows asks **"The publisher could not be verified"**, click **Run**. If it says **"Windows protected your PC"**, click **More info**, then **Run anyway**.
 
@@ -29,34 +29,34 @@ Docs: https://connectionshub.atlastube.com/docs/api/mcp
 Or from PowerShell, in the extracted folder:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\windows\install-connections-hub.ps1 YOUR_API_KEY
+powershell -ExecutionPolicy Bypass -File .\windows\install-calcs-mcp.ps1 YOUR_API_KEY
 ```
 
 ## Mac
 
 1. Unzip the download, then open **Terminal** (Cmd+Space, type Terminal, press Return).
-2. Type `bash` and a space, drag **install-connections-hub.sh** from the **mac** folder into the Terminal window, and press Return. Or type the path yourself:
+2. Type `bash` and a space, drag **install-calcs-mcp.sh** from the **mac** folder into the Terminal window, and press Return. Or type the path yourself:
 
 ```bash
-bash ~/Downloads/connections-hub-installer/mac/install-connections-hub.sh
+bash ~/Downloads/calcs-mcp-installer/mac/install-calcs-mcp.sh
 ```
 
 3. Paste in your API key from your email. Note: paste is hidden, so it won't show you what you're pasting in for security reasons.
 
 <img width="654" height="254" alt="Screenshot 2026-10-25 at 4 55 09 pm" src="https://github.com/user-attachments/assets/f014ebc7-c457-4272-9825-2899b543fb49" />
 
-It will install an environment variable, `HUB_API_KEY` and install the MCP for all the installed applications it detects.
+It will install an environment variable, `CALCS_API_KEY` and install the MCP for all the installed applications it detects.
 
 <img width="902" height="695" alt="Screenshot 2026-10-25 at 4 55 35 pm" src="https://github.com/user-attachments/assets/0ae04166-837d-4a13-9ecb-69c5e3866ab0" />
 
-Or pass the key straight in: `bash ./mac/install-connections-hub.sh YOUR_API_KEY`
+Or pass the key straight in: `bash ./mac/install-calcs-mcp.sh YOUR_API_KEY`
 
 `--detect` (`-Detect` on Windows) lists the tools it finds and changes nothing. `--skip-verify` (`-SkipVerify`) skips the key check.
 
 ## What it does
 
 1. Checks the key looks complete (starts with `zpka_`) and that the API accepts it.
-2. Saves the key as `HUB_API_KEY`. On Mac that is `~/.config/calcs/hub-api-key.sh`, sourced from your shell rc file. On Windows it is a user environment variable.
+2. Saves the key as `CALCS_API_KEY`. On Mac that is `~/.config/calcs/calcs-api-key.sh`, sourced from your shell rc file. On Windows it is a user environment variable.
 3. Adds a `calcs` MCP server (`https://api.calcs.com/mcp`) to each tool it finds, and prints the full path of every file it changes:
 
 | Tool | Config |
@@ -67,8 +67,8 @@ Or pass the key straight in: `bash ./mac/install-connections-hub.sh YOUR_API_KEY
 | VS Code | user `mcp.json`, prompts for the key |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` |
 | Antigravity | `~/.gemini/config/mcp_config.json` (and `~/.gemini/antigravity/mcp_config.json` if that folder exists) |
-| Codex | `~/.codex/config.toml`, reads `HUB_API_KEY` |
-| Gemini CLI | `~/.gemini/settings.json`, reads `HUB_API_KEY` |
+| Codex | `~/.codex/config.toml`, reads `CALCS_API_KEY` |
+| Gemini CLI | `~/.gemini/settings.json`, reads `CALCS_API_KEY` |
 
 Config files are backed up as `<file>.bak-<timestamp>` before they change. A file that is not plain JSON is left alone and reported. Running the script again replaces the existing entry.
 

@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-Sets up the HSS Connections Hub API key and the Connections Hub MCP server on Windows.
+Sets up the Calcs API key and MCP server on Windows.
 
 .DESCRIPTION
 1. Checks the key against the API (skip with -SkipVerify).
-2. Saves the key as the user environment variable HUB_API_KEY, for the REST API
+2. Saves the key as the user environment variable CALCS_API_KEY, for the REST API
    (curl, scripts, Codex, Gemini CLI).
 3. Adds the "calcs" MCP server to each tool it finds:
    Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Antigravity, Codex, Gemini CLI
@@ -14,16 +14,16 @@ A file that is not plain JSON (for example VS Code settings with comments) is le
 alone and reported.
 
 .PARAMETER ApiKey
-Your Connections Hub API key. If you leave it out, the script asks for it.
+Your Calcs API key. If you leave it out, the script asks for it.
 
 .PARAMETER Detect
 List the tools it finds and change nothing.
 
 .EXAMPLE
-.\install-connections-hub.ps1 YOUR_API_KEY
+.\install-calcs-mcp.ps1 YOUR_API_KEY
 
 .EXAMPLE
-powershell -ExecutionPolicy Bypass -File .\install-connections-hub.ps1 YOUR_API_KEY
+powershell -ExecutionPolicy Bypass -File .\install-calcs-mcp.ps1 YOUR_API_KEY
 #>
 [CmdletBinding()]
 param(
@@ -37,7 +37,7 @@ try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::
 
 $McpUrl  = 'https://api.calcs.com/mcp'
 $ApiUrl  = 'https://api.calcs.com/v1/projects'
-$EnvName = 'HUB_API_KEY'
+$EnvName = 'CALCS_API_KEY'
 $Stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
 $Utf8    = New-Object System.Text.UTF8Encoding($false)   # no BOM, some tools choke on one
 
@@ -185,13 +185,13 @@ if ($ApiKey) {
     for ($try = 1; $try -le 3; $try++) {
         # First try shows a * per character. If that paste didn't come through whole, later tries
         # use a plain prompt (the key shows while pasting) and blank it straight after.
-        if ($try -eq 1) { $raw = Read-KeyStars 'Paste your Connections Hub API key and press Enter (right-click pastes; you will see * as it goes in)' }
+        if ($try -eq 1) { $raw = Read-KeyStars 'Paste your Calcs API key and press Enter (right-click pastes; you will see * as it goes in)' }
         else { $raw = Read-KeyMasked 'Paste it again and press Enter (this time it shows while you paste, then it is hidden)' }
         $Key = Format-Key $raw
         if ($Key -cmatch $KeyPattern) { break }
         $msg = "That doesn't look like a whole key (got $($Key.Length) characters; keys start with zpka_)."
         if ($try -lt 3) { Write-Warn "$msg Copy it again from the email and paste." }
-        else { Write-Fail "$msg Gave up after 3 tries. Usage: .\install-connections-hub.ps1 YOUR_API_KEY"; exit 1 }
+        else { Write-Fail "$msg Gave up after 3 tries. Usage: .\install-calcs-mcp.ps1 YOUR_API_KEY"; exit 1 }
     }
 }
 Write-Ok "Got a $($Key.Length)-character key"
@@ -271,15 +271,15 @@ function Update-JsonConfig($path, $kind) {
         'desktop' {
             Set-Prop (Get-Section $obj 'mcpServers') 'calcs' ([ordered]@{
                 command = 'npx'
-                args    = @('-y', 'mcp-remote', $McpUrl, '--header', 'Authorization:${HUB_AUTH}')
-                env     = [ordered]@{ HUB_AUTH = $bearer; NODE_OPTIONS = '--use-system-ca' }   # trust the OS certificate store (antivirus/proxy HTTPS inspection)
+                args    = @('-y', 'mcp-remote', $McpUrl, '--header', 'Authorization:${CALCS_AUTH}')
+                env     = [ordered]@{ CALCS_AUTH = $bearer; NODE_OPTIONS = '--use-system-ca' }   # trust the OS certificate store (antivirus/proxy HTTPS inspection)
             })
         }
         'gemini' {
-            Set-Prop (Get-Section $obj 'mcpServers') 'calcs' ([ordered]@{ httpUrl = $McpUrl; headers = [ordered]@{ Authorization = 'Bearer $HUB_API_KEY' } })
+            Set-Prop (Get-Section $obj 'mcpServers') 'calcs' ([ordered]@{ httpUrl = $McpUrl; headers = [ordered]@{ Authorization = 'Bearer $CALCS_API_KEY' } })
         }
         'vscode' {
-            $keyInput = [ordered]@{ type = 'promptString'; id = 'calcs-api-key'; description = 'Connections Hub API key'; password = $true }
+            $keyInput = [ordered]@{ type = 'promptString'; id = 'calcs-api-key'; description = 'Calcs API key'; password = $true }
             $rest = @()
             if ($obj.PSObject.Properties['inputs'] -and $obj.inputs -is [array]) {
                 $rest = @($obj.inputs | Where-Object { -not $_ -or $_.id -ne 'calcs-api-key' })
@@ -306,7 +306,7 @@ function Invoke-Step($id, $action) {
     catch { Write-Fail "$($_.Exception.Message)"; $Problems.Add($Clients[$id]) }
 }
 
-# ---------------------------------------------------------------- the API key (HUB_API_KEY)
+# ---------------------------------------------------------------- the API key (CALCS_API_KEY)
 
 Write-Host "`nSaving the API key as ${EnvName}:"
 try {
@@ -350,7 +350,7 @@ foreach ($id in @($Clients.Keys)) {
                 # so close it completely (background processes too) before writing, then reopen it.
                 $reopen = $false
                 if ((Get-DesktopProcesses).Count -gt 0) {
-                    $ans = Read-Host 'Claude Desktop is open and has to restart to load Connections Hub. Close it now? Any unsent message is lost. [Y/n]'
+                    $ans = Read-Host 'Claude Desktop is open and has to restart to load Calcs. Close it now? Any unsent message is lost. [Y/n]'
                     if ($ans -notmatch '^\s*n') {
                         Get-DesktopProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
                         Start-Sleep -Seconds 2
@@ -466,5 +466,5 @@ if ($Notes.Count -gt 0) {
     Write-Host 'Next steps:'
     foreach ($n in $Notes) { Write-Host "  - $n" }
 }
-Write-Host "`nTest it by asking your tool: `"List the Connections Hub calculators.`""
+Write-Host "`nTest it by asking your tool: `"List the available calculators.`""
 if ($Problems.Count -gt 0) { exit 1 }
