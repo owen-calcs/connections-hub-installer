@@ -14,7 +14,7 @@ Docs: https://connectionshub.atlastube.com/docs/api/mcp
 ## Windows
 
 1. Right-click the zip, choose **Extract All**, then open the folder. Don't run anything from inside the zip.
-2. Double-click **install-connections-hub** with the gear icon (type: Windows Command Script). Not the other files with the same name.
+2. Open the **windows** folder and double-click **install-connections-hub** with the gear icon (type: Windows Command Script). Not the other file with the same name.
 
 <img src="docs/windows-1-files.png" alt="The extracted folder: double-click install-connections-hub with the gear icon, type Windows Command Script" width="620" />
 
@@ -26,20 +26,22 @@ Docs: https://connectionshub.atlastube.com/docs/api/mcp
 
 <img src="docs/windows-3-installer-done.png" alt="Installer output: a 46-character key accepted, Claude Code, Claude Desktop and VS Code configured" width="900" />
 
-Or from PowerShell:
+Or from PowerShell, in the extracted folder:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install-connections-hub.ps1 YOUR_API_KEY
+powershell -ExecutionPolicy Bypass -File .\windows\install-connections-hub.ps1 YOUR_API_KEY
 ```
 
 ## Mac
 
-On Finder:
+1. Unzip the download, then open **Terminal** (Cmd+Space, type Terminal, press Return).
+2. Type `bash` and a space, drag **install-connections-hub.sh** from the **mac** folder into the Terminal window, and press Return. Or type the path yourself:
 
-Double click the `install-connections-hub.sh` file:
-<img width="913" height="239" alt="Screenshot 2026-10-25 at 4 54 15 pm" src="https://github.com/user-attachments/assets/91084817-34d9-4d2a-8353-3545ea5de50b" />
+```bash
+bash ~/Downloads/connections-hub-installer/mac/install-connections-hub.sh
+```
 
-Then paste in your API key from your email. Note: paste is hidden, so it won't show you what you're pasting in for security reasons.
+3. Paste in your API key from your email. Note: paste is hidden, so it won't show you what you're pasting in for security reasons.
 
 <img width="654" height="254" alt="Screenshot 2026-10-25 at 4 55 09 pm" src="https://github.com/user-attachments/assets/f014ebc7-c457-4272-9825-2899b543fb49" />
 
@@ -47,13 +49,7 @@ It will install an environment variable, `HUB_API_KEY` and install the MCP for a
 
 <img width="902" height="695" alt="Screenshot 2026-10-25 at 4 55 35 pm" src="https://github.com/user-attachments/assets/0ae04166-837d-4a13-9ecb-69c5e3866ab0" />
 
-If double-clicking opens the file in a text editor instead, open **Terminal** (Cmd+Space, type Terminal, Return) and run:
-
-```bash
-bash ~/Downloads/connections-hub-installer/install-connections-hub.sh
-```
-
-Or pass the key straight in: `bash ./install-connections-hub.sh YOUR_API_KEY`
+Or pass the key straight in: `bash ./mac/install-connections-hub.sh YOUR_API_KEY`
 
 `--detect` (`-Detect` on Windows) lists the tools it finds and changes nothing. `--skip-verify` (`-SkipVerify`) skips the key check.
 
