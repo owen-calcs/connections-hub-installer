@@ -34,8 +34,12 @@ powershell -ExecutionPolicy Bypass -File .\windows\install-connections-hub.ps1 Y
 
 ## Mac
 
-1. Open the **mac** folder and double-click **install-connections-hub.command**. Terminal opens.
-2. If macOS says it can't be opened because Apple can't check it for malicious software, right-click the file, choose **Open**, then click **Open** again. You only do this once.
+1. Unzip the download, then open **Terminal** (Cmd+Space, type Terminal, press Return).
+2. Type `bash` and a space, drag **install-connections-hub.sh** from the **mac** folder into the Terminal window, and press Return. Or type the path yourself:
+
+```bash
+bash ~/Downloads/connections-hub-installer/mac/install-connections-hub.sh
+```
 
 3. Paste in your API key from your email. Note: paste is hidden, so it won't show you what you're pasting in for security reasons.
 
@@ -44,12 +48,6 @@ powershell -ExecutionPolicy Bypass -File .\windows\install-connections-hub.ps1 Y
 It will install an environment variable, `HUB_API_KEY` and install the MCP for all the installed applications it detects.
 
 <img width="902" height="695" alt="Screenshot 2026-10-25 at 4 55 35 pm" src="https://github.com/user-attachments/assets/0ae04166-837d-4a13-9ecb-69c5e3866ab0" />
-
-If double-clicking opens the file in a text editor instead, open **Terminal** (Cmd+Space, type Terminal, Return) and run:
-
-```bash
-bash ~/Downloads/connections-hub-installer/mac/install-connections-hub.sh
-```
 
 Or pass the key straight in: `bash ./mac/install-connections-hub.sh YOUR_API_KEY`
 
